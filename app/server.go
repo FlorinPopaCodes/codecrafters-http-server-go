@@ -62,6 +62,8 @@ func handleConnection(c net.Conn, dir string) {
 	switch {
 	case path == "/":
 		c.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+	case path == "/user-agent":
+		c.Write([]byte(fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(c.RemoteAddr().String()), c.RemoteAddr().String())))
 	case strings.HasPrefix(path, "/echo/"):
 		echo := strings.TrimPrefix(path, "/echo/")
 		response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(echo), echo)
