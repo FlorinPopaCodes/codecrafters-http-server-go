@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -28,7 +29,31 @@ func main() {
 		// The loop then returns to accepting, so that
 		// multiple connections may be served concurrently.
 		go func(c net.Conn) {
-			c.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+			// Print all incoming data.
+			buf := make([]byte, 1024)
+			_, err := c.Read(buf)
+			if err != nil {
+				fmt.Println("Error reading:", err.Error())
+
+			}
+			requestLines := strings.Split(string(buf), "\r\n")
+			splitFirstLine := strings.Split(requestLines[0], " ")
+			path := splitFirstLine[1]
+
+			//fmt.Printf("Method: %s\n", method)
+			//fmt.Printf("Path: %s\n", path)
+			//fmt.Printf("Protocol: %s\n", protocol)
+			//// fmt.Printf("strings.Split(): %#v\n", request_lines)
+			//fmt.Println(string(buf))
+
+			// Write the response.
+			if path == "/" {
+				c.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+
+			} else {
+				c.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
+			}
+
 			// Shut down the connection.
 			c.Close()
 		}(conn)
