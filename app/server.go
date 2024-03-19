@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -88,7 +89,7 @@ func handleConnection(c net.Conn, dir string) {
 		if method == "GET" {
 			serveFile(c, dir, filePath)
 		} else {
-			saveFile(c, reader, dir, filePath)
+			saveFile(c, reader, headers, dir, filePath)
 		}
 	default:
 		c.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
@@ -114,17 +115,35 @@ func serveFile(c net.Conn, dir, filePath string) {
 	io.Copy(c, file) // Stream the file content directly without loading into memory.
 }
 
-func saveFile(c net.Conn, reader *bufio.Reader, dir, filePath string) {
+func saveFile(c net.Conn, reader *bufio.Reader, headers map[string]string, dir, filePath string) {
 	fullPath := dir + "/" + filePath
 	file, err := os.Create(fullPath)
 	if err != nil {
+		println("Error creating file:", err)
 		c.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
 		return
 	}
 	defer file.Close()
 
-	// For simplicity, assuming the rest of the request is the body. In a real application, you'd need to parse headers to find the Content-Length and read that many bytes.
-	io.Copy(file, reader) // Stream the body directly into the file.
+	contentLength, err := strconv.Atoi(headers["Content-Length"])
+	if err != nil {
+		// Handle error if Content-Length is missing or invalid
+		println("Error parsing Content-Length:", err)
+		c.Write([]byte("HTTP/1.1 400 Bad Request\r\n\r\n"))
+		return
+	}
 
+	// Create a limit reader to read only 'contentLength' bytes
+	limitReader := io.LimitReader(reader, int64(contentLength))
+
+	// Use 'limitReader' instead of 'reader' in io.Copy to read only the specified amount of data
+	_, err = io.Copy(file, limitReader)
+	if err != nil {
+		println("Error writing file:", err)
+		c.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
+		return
+	}
+
+	// Now, the program should reach this point
 	c.Write([]byte("HTTP/1.1 201 Created\r\n\r\n"))
 }
