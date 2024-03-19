@@ -40,11 +40,16 @@ func main() {
 			splitFirstLine := strings.Split(requestLines[0], " ")
 			path := splitFirstLine[1]
 
-			//fmt.Printf("Method: %s\n", method)
-			//fmt.Printf("Path: %s\n", path)
-			//fmt.Printf("Protocol: %s\n", protocol)
-			//// fmt.Printf("strings.Split(): %#v\n", request_lines)
-			//fmt.Println(string(buf))
+			headers := make(map[string]string)
+			// parse headers
+			for _, header := range requestLines[1:] {
+				if !strings.Contains(header, ": ") {
+					continue
+				}
+
+				splitHeader := strings.Split(header, ": ")
+				headers[splitHeader[0]] = splitHeader[1]
+			}
 
 			// Write the response.
 			if path == "/" {
@@ -53,6 +58,9 @@ func main() {
 			} else if strings.HasPrefix(path, "/echo") {
 				echo := strings.Split(path, "/echo/")[1]
 				response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s\r\n\r\n", len(echo), echo)
+				c.Write([]byte(response))
+			} else if path == "/user-agent" {
+				response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s\r\n\r\n", len(headers["User-Agent"]), headers["User-Agent"])
 				c.Write([]byte(response))
 			} else {
 				c.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
