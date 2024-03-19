@@ -76,6 +76,7 @@ func main() {
 					file, err := os.Open(dir + "/" + filePath)
 					if err != nil {
 						c.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
+						c.Close()
 						return
 					}
 					defer file.Close()
@@ -83,6 +84,7 @@ func main() {
 					fileInfo, err := file.Stat()
 					if err != nil {
 						c.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
+						c.Close()
 						return
 					}
 
@@ -91,6 +93,7 @@ func main() {
 					_, err = file.Read(fileContent)
 					if err != nil {
 						c.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
+						c.Close()
 						return
 					}
 
