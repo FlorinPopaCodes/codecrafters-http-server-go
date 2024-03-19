@@ -50,6 +50,10 @@ func main() {
 			if path == "/" {
 				c.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
 
+			} else if strings.HasPrefix(path, "/echo") {
+				echo := strings.Split(path, "/echo/")[1]
+				response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s\r\n\r\n", len(echo), echo)
+				c.Write([]byte(response))
 			} else {
 				c.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
 			}
