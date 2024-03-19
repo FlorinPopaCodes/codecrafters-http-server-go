@@ -109,8 +109,12 @@ func main() {
 
 					defer file.Close()
 
-					bodyStartIndex := strings.Index(string(buf), "\r\n\r\n") + 4
-					body := buf[bodyStartIndex:]
+					n, err := c.Read(buf)
+					if err != nil {
+						fmt.Println("Error reading:", err.Error())
+					}
+					bodyStartIndex := strings.Index(string(buf[:n]), "\r\n\r\n") + 4
+					body := buf[bodyStartIndex:n]
 					_, err = file.Write(body)
 					if err != nil {
 						c.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
