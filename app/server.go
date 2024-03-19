@@ -56,14 +56,29 @@ func handleConnection(c net.Conn, dir string) {
 	}
 	method, path := parts[0], parts[1]
 
-	// Skipping headers, not parsing them in this simplified version.
-	// In a real application, you'd parse headers here.
+	headers := make(map[string]string)
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Error reading header:", err)
+			return
+		}
+		line = strings.TrimSpace(line)
+		if line == "" { // Empty line indicates end of headers
+			break
+		}
+		headerParts := strings.SplitN(line, ": ", 2)
+		if len(headerParts) == 2 {
+			headers[headerParts[0]] = headerParts[1]
+		}
+	}
 
 	switch {
 	case path == "/":
 		c.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
 	case path == "/user-agent":
-		c.Write([]byte(fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(c.RemoteAddr().String()), c.RemoteAddr().String())))
+		print("User-Agent: ", headers["User-Agent"])
+		c.Write([]byte(fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(headers["User-Agent"]), headers["User-Agent"])))
 	case strings.HasPrefix(path, "/echo/"):
 		echo := strings.TrimPrefix(path, "/echo/")
 		response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(echo), echo)
