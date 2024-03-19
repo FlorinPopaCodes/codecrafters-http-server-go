@@ -94,7 +94,7 @@ func main() {
 						return
 					}
 
-					response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s\r\n\r\n", fileSize, fileContent)
+					response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n%s\r\n\r\n", fileSize, fileContent)
 					c.Write([]byte(response))
 				} else if method == "POST" {
 
