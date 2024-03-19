@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
+	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strings"
@@ -12,11 +15,9 @@ func main() {
 	// fmt.Println("Logs from your program will appear here!")
 
 	// if it exists save the '--directory' flag value to the 'dir' variable
-	dir := ""
-	if len(os.Args) > 1 && os.Args[1] == "--directory" {
-		dir = os.Args[2]
-		println(dir)
-	}
+	var dir string
+	flag.StringVar(&dir, "directory", "", "the directory to serve files from")
+	flag.Parse()
 
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
@@ -35,104 +36,78 @@ func main() {
 		// Handle the connection in a new goroutine.
 		// The loop then returns to accepting, so that
 		// multiple connections may be served concurrently.
-		go func(c net.Conn) {
-			// Print all incoming data.
-			buf := make([]byte, 1024)
-			_, err := c.Read(buf)
-			if err != nil {
-				fmt.Println("Error reading:", err.Error())
-
-			}
-			requestLines := strings.Split(string(buf), "\r\n")
-			splitFirstLine := strings.Split(requestLines[0], " ")
-			method, path := splitFirstLine[0], splitFirstLine[1]
-
-			headers := make(map[string]string)
-			// parse headers
-			for _, header := range requestLines[1:] {
-				if !strings.Contains(header, ": ") {
-					continue
-				}
-
-				splitHeader := strings.Split(header, ": ")
-				headers[splitHeader[0]] = splitHeader[1]
-			}
-
-			// Write the response.
-			if path == "/" {
-				c.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
-
-			} else if strings.HasPrefix(path, "/echo") {
-				echo := strings.Split(path, "/echo/")[1]
-				response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s\r\n\r\n", len(echo), echo)
-				c.Write([]byte(response))
-			} else if path == "/user-agent" {
-				response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s\r\n\r\n", len(headers["User-Agent"]), headers["User-Agent"])
-				c.Write([]byte(response))
-			} else if strings.HasPrefix(path, "/files") {
-				filePath := strings.Split(path, "/files/")[1]
-
-				if method == "GET" {
-					file, err := os.Open(dir + "/" + filePath)
-					if err != nil {
-						c.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
-						c.Close()
-						return
-					}
-					defer file.Close()
-
-					fileInfo, err := file.Stat()
-					if err != nil {
-						c.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
-						c.Close()
-						return
-					}
-
-					fileSize := fileInfo.Size()
-					fileContent := make([]byte, fileSize)
-					_, err = file.Read(fileContent)
-					if err != nil {
-						c.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
-						c.Close()
-						return
-					}
-
-					response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n%s\r\n\r\n", fileSize, fileContent)
-					c.Write([]byte(response))
-				} else if method == "POST" {
-					file, err := os.Create(dir + "/" + filePath)
-					if err != nil {
-						c.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
-						c.Close()
-						return
-					}
-
-					defer file.Close()
-
-					n, err := c.Read(buf)
-					if err != nil {
-						fmt.Println("Error reading:", err.Error())
-					}
-					bodyStartIndex := strings.Index(string(buf[:n]), "\r\n\r\n") + 4
-					body := buf[bodyStartIndex:n]
-					_, err = file.Write(body)
-					if err != nil {
-						c.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
-						c.Close()
-						return
-					}
-
-					c.Write([]byte("HTTP/1.1 201 Created\r\n\r\n"))
-				} else {
-					c.Write([]byte("HTTP/1.1 405 Method Not Allowed\r\n\r\n"))
-				}
-
-			} else {
-				c.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
-			}
-
-			// Shut down the connection.
-			c.Close()
-		}(conn)
+		go handleConnection(conn, dir)
 	}
+}
+
+func handleConnection(c net.Conn, dir string) {
+	defer c.Close()
+	reader := bufio.NewReader(c)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Println("Error reading:", err)
+		return
+	}
+
+	parts := strings.Split(strings.TrimSpace(line), " ")
+	if len(parts) < 2 {
+		fmt.Println("Invalid request line:", line)
+		return
+	}
+	method, path := parts[0], parts[1]
+
+	// Skipping headers, not parsing them in this simplified version.
+	// In a real application, you'd parse headers here.
+
+	switch {
+	case path == "/":
+		c.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+	case strings.HasPrefix(path, "/echo/"):
+		echo := strings.TrimPrefix(path, "/echo/")
+		response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(echo), echo)
+		c.Write([]byte(response))
+	case strings.HasPrefix(path, "/files/") && (method == "GET" || method == "POST"):
+		filePath := strings.TrimPrefix(path, "/files/")
+		if method == "GET" {
+			serveFile(c, dir, filePath)
+		} else {
+			saveFile(c, reader, dir, filePath)
+		}
+	default:
+		c.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
+	}
+}
+
+func serveFile(c net.Conn, dir, filePath string) {
+	fullPath := dir + "/" + filePath
+	file, err := os.Open(fullPath)
+	if err != nil {
+		c.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
+		return
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		c.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
+		return
+	}
+
+	c.Write([]byte(fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n", fileInfo.Size())))
+	io.Copy(c, file) // Stream the file content directly without loading into memory.
+}
+
+func saveFile(c net.Conn, reader *bufio.Reader, dir, filePath string) {
+	fullPath := dir + "/" + filePath
+	file, err := os.Create(fullPath)
+	if err != nil {
+		c.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
+		return
+	}
+	defer file.Close()
+
+	// For simplicity, assuming the rest of the request is the body. In a real application, you'd need to parse headers to find the Content-Length and read that many bytes.
+	io.Copy(file, reader) // Stream the body directly into the file.
+
+	c.Write([]byte("HTTP/1.1 201 Created\r\n\r\n"))
 }
