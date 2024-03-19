@@ -100,7 +100,23 @@ func main() {
 					response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n%s\r\n\r\n", fileSize, fileContent)
 					c.Write([]byte(response))
 				} else if method == "POST" {
+					file, err := os.Create(dir + "/" + filePath)
+					if err != nil {
+						c.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
+						c.Close()
+						return
+					}
 
+					defer file.Close()
+
+					_, err = file.Write([]byte(requestLines[len(requestLines)-1]))
+					if err != nil {
+						c.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
+						c.Close()
+						return
+					}
+
+					c.Write([]byte("HTTP/1.1 201 Created\r\n\r\n"))
 				} else {
 					c.Write([]byte("HTTP/1.1 405 Method Not Allowed\r\n\r\n"))
 				}
